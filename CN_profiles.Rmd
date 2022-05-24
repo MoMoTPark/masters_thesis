@@ -1,0 +1,340 @@
+---
+title: "copy-number profiles"
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r, echo=FALSE}
+source("Simulation_functions.R")
+source("crossOverFunctions.R")
+source("segmentCN.R")
+```
+
+
+Simulated copy-number profiles with interesting properties.
+```{r}
+#' Implement arrays to hold values for copy-number profile segments
+#' Proof of concept code:
+n = 5
+indexArray = 1:n
+SegLenArray = c(100, 1500, 250, 88, 50000)
+InferredCNArray = 1:n
+ActualCNArray = c(0.5, 1, 2, 2.5, 3, 4, 5, 7, 10, 12, 40, 55, 70)
+# for (i in 1:n) {
+# 
+# }
+```
+
+```{r}
+# segmentsDF  = data.frame (segment = indexArray, 
+#                           segLength = SegLenArray, 
+#                           actualSegCN = ActualCNArray)
+# Permutate over all parameters 
+# segmentsDFexpanded  = expand.grid (segLength = SegLenArray,
+#                                    actualSegCN = ActualCNArray,
+#                                    coverage = 30)
+seg1_observedDF = obs_cn_width(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = 1500,
+                        cur_seg_length = 185,
+                        actual_flank_seg_cn = 70,
+                        actual_cur_seg_cn = 2,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")
+seg2_observedDF = obs_cn_width(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = seg1_observedDF$cur_seg_length[1],
+                        cur_seg_length = 285,
+                        actual_flank_seg_cn = seg1_observedDF$actual_cur_seg_cn[1],
+                        actual_cur_seg_cn = 5,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")
+overall_observedDF = bind_rows(seg1_observedDF, seg2_observedDF)
+seg3_observedDF = obs_cn_width(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = seg2_observedDF$cur_seg_length[1],
+                        cur_seg_length = 450,
+                        actual_flank_seg_cn = seg2_observedDF$actual_cur_seg_cn[1],
+                        actual_cur_seg_cn = 1,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")
+
+overall_observedDF = overall_observedDF %>% add_row(seg3_observedDF)
+```
+
+## Testing for various interesting copy-number profiles
+```{r}
+# Filter exception cases where VAF based model performs worse than RD based models in deletion cases 
+# filter(actual_flank_seg_cn > actual_cur_seg_cn & !vafBetterThanRD) %>%
+variableCurrentSegmentLength = c(55, 1258, 301, 552, 690, 5000, 2312, 68, 9000, 105)
+variableActualCurrentSegmentCN = c(70, 8, 2, 3, 1, 5, 24, 1, 2, 55)
+variableSegmentCNs = segmentCN(n = 10000, 
+                        read_length = 148, # chr21.HG002 
+                        coverage = 60,
+                        flank_seg_length = 1000,
+                        cur_seg_length = variableCurrentSegmentLength,
+                        actual_flank_seg_cn = 2,
+                        actual_cur_seg_cn = variableActualCurrentSegmentCN,
+                        fragment_size = 551, # average insert size in chr21.HG002
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")
+variableSegmentCNs %>%
+  mutate(vaf=sv_vaf(actual_flank_seg_cn, actual_cur_seg_cn)) %>%
+  mutate(vafBetterThanRD = rd_ci_width > vaf_ci_width) %>%
+  view()
+
+testingCurrentSegment50To250 = rep(seq(50, 110, 10), each = 3)
+testingActualCurrentSegmentCN1And2 = rep(c(1, 2), length.out=21)
+testingShortCurrentSegments = segmentCN(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = 1500,
+                        cur_seg_length = testingCurrentSegment50To250,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = testingActualCurrentSegmentCN1And2,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")
+testingShortCurrentSegments %>%
+  mutate(vaf=sv_vaf(actual_flank_seg_cn, actual_cur_seg_cn)) %>%
+  mutate(vafBetterThanRD = rd_ci_width > vaf_ci_width) %>%
+  view()
+
+segmentCN(n = 10000, 
+                        read_length = 150, 
+                        coverage = 30,
+                        flank_seg_length = 1500,
+                        cur_seg_length = testingCurrentSegment50To250,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = testingActualCurrentSegmentCN1And2,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair") %>%
+  bind_rows(testingShortCurrentSegments) %>%
+  bind_rows(segmentCN(n = 10000, 
+                        read_length = 100, 
+                        coverage = 60,
+                        flank_seg_length = 1500,
+                        cur_seg_length = testingCurrentSegment50To250,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = testingActualCurrentSegmentCN1And2,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair")) %>%
+  bind_rows(segmentCN(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = 1500,
+                        cur_seg_length = testingCurrentSegment50To250,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = testingActualCurrentSegmentCN1And2,
+                        fragment_size = 400,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair"))
+```
+```{r}
+randomisedCurrentSegmentLength = sample(x = seq(50, 10000),  size = 499, replace = TRUE)
+randomisedActualCurrentSegmentCN = sample(x = seq(0.5, 70, 0.5), size = 499, replace = TRUE)
+ciCheckDF = segmentCN(n = 10000, 
+                        read_length = 100, 
+                        coverage = 30,
+                        flank_seg_length = 1500,
+                        cur_seg_length = randomisedCurrentSegmentLength,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = randomisedActualCurrentSegmentCN,
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair") %>%
+  mutate(vaf=sv_vaf(actual_flank_seg_cn, actual_cur_seg_cn)) %>%
+  mutate(vafBetterThanRD = rd_ci_width > vaf_ci_width)
+
+ciCheckDF %>%
+  filter(actual_flank_seg_cn > actual_cur_seg_cn & !vafBetterThanRD) %>%
+  view()  
+```
+## Special case short segment copy-number clusters
+Amplification
+```{r}
+shortSegmentClustersLength = sample(x = seq(50, 150),  size = 9, replace = TRUE)
+#shortSegmentClustersCN = sample(x = seq(, 70, 0.5), size = 499, replace = TRUE)
+shortSegmentClusterDF = segmentCN(n = 10000, 
+                        read_length = 150, 
+                        coverage = 30,
+                        flank_seg_length = 5000,
+                        cur_seg_length = shortSegmentClustersLength,
+                        actual_flank_seg_cn = 1,
+                        actual_cur_seg_cn = seq(2, 10),
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair") %>%
+  mutate(vaf=sv_vaf(actual_flank_seg_cn, actual_cur_seg_cn)) %>%
+  mutate(vafBetterThanRD = rd_ci_width > vaf_ci_width)
+```
+
+Deletion
+```{r}
+#shortSegmentClustersLength = sample(x = seq(50, 150),  size = 9, replace = TRUE)
+#shortSegmentClustersCN = sample(x = seq(, 70, 0.5), size = 499, replace = TRUE)
+deletionClusterDF = segmentCN(n = 10000, 
+                        read_length = 150, 
+                        coverage = 30,
+                        flank_seg_length = 5000,
+                        cur_seg_length = shortSegmentClustersLength,
+                        actual_flank_seg_cn = 10,
+                        actual_cur_seg_cn = seq(9, 1),
+                        fragment_size = 600,
+                        rd_model = "start_in",
+                        vaf_model = "read_pair") %>%
+  mutate(vaf=sv_vaf(actual_flank_seg_cn, actual_cur_seg_cn)) %>%
+  mutate(vafBetterThanRD = rd_ci_width > vaf_ci_width)
+```
+
+## Test and development
+```{r}
+# testDF = data.frame(n = 10000, 
+#                         read_length = 100, 
+#                         coverage = 30,
+#                         flank_seg_length = 1500,
+#                         cur_seg_length = c(578, 399, 200, 5000),
+#                         actual_flank_seg_cn = 70,
+#                         actual_cur_seg_cn = c(5, 4, 9, 2),
+#                         fragment_size = 600,
+#                         rd_model = "start_in",
+#                         vaf_model = "read_pair")
+# n = dim(testDF)[1]
+# for (i in 2:n) {
+#   testDF$flank_seg_length[i] = testDF$cur_seg_length[(i - 1)]
+# }
+# 
+# 
+# segementTestDF = segmentCN(n = 10000, 
+#                         read_length = 100, 
+#                         coverage = 30,
+#                         flank_seg_length = 1500,
+#                         cur_seg_length = c(578, 399, 200, 5000),
+#                         actual_flank_seg_cn = 70,
+#                         actual_cur_seg_cn = c(5, 4, 9, 2),
+#                         fragment_size = 600,
+#                         rd_model = "start_in",
+#                         vaf_model = "read_pair")
+
+# variableSegmentCNs %>%
+#   group_by(model) %>%
+#   summarise(mean(ci_width)) %>%
+#   ungroup()
+# 
+# variableVafDF = variableSegmentCNs %>%
+#   filter(model == "vaf read_pair")
+# 
+# fixedVariableDF = variableSegmentCNs %>%
+#   filter(model == "rd start_in") %>%
+#   rename(rd_ci_width = ci_width) %>%
+#   bind_cols(variableVafDF$ci_width) #%>%
+  #rename(vaf_ci_width = ...10) %>%
+  #select(-c(model))
+
+# fixDF(variableSegmentCNs, rd_model = "rd start_in", vaf_model = "vaf read_pair")
+# someDF = segmentCN(n = 10000, 
+#                         read_length = 100, 
+#                         coverage = 30,
+#                         flank_seg_length = 1500,
+#                         cur_seg_length = variableCurrentSegmentLength,
+#                         actual_flank_seg_cn = 70,
+#                         actual_cur_seg_cn = variableActualCurrentSegmentCN,
+#                         fragment_size = 600,
+#                         rd_model = "start_in",
+#                         vaf_model = "read_pair")
+
+# data.frame(fragment_size = someDF$fragment_size,
+#              read_length = someDF$read_length,
+#              coverage = someDF$coverage,
+#              flank_seg_length = someDF$flank_seg_length,
+#              cur_seg_length = someDF$cur_seg_length,
+#              actual_flank_seg_cn = someDF$actual_flank_seg_cn,
+#              actual_cur_seg_cn = someDF$actual_cur_seg_cn,
+#              rd_ci_width = someDF$rd_ci_width,
+#              vaf_ci_width = someDF$vaf_ci_width)
+```
+
+## Case investigation
+```{r}
+# The higher the log value the more similar the performance of two models are. 
+# Higher log values = more similar performance
+lmDF = sim_permutations(
+  cur_seg_length = seq(250, 400, 50),
+  flank_seg_length = seq(1200, 1350, 50),
+  actual_flank_seg_cn = 2,
+  actual_cur_seg_cn = 3,
+  fragment_size = c(400, 500, 600),
+  coverage = seq(30, 60, 10),
+  rd_model = "start_in",
+  vaf_model = "read_pair") %>%
+  crossOverDF( rd_model = "rd start_in", 
+               vaf_model = "vaf read_pair") %>%
+  mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width)))
+model1 = lm(lnCI_difference ~ cur_seg_length, lmDF)
+summary(model1)
+plot(model1)
+model2 = lm(lnCI_difference ~ cur_seg_length + flank_seg_length + fragment_size, data = lmDF)
+summary(model2)
+anova(model1, model2)
+```
+
+```{R}
+lm2DF = lmGeneralSim %>%
+  crossOverDF( rd_model = "rd start_in", 
+               vaf_model = "vaf read_pair") %>%
+  mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width)))
+model1 = lm(lnCI_difference ~ cur_seg_length, lm2DF)
+summary(model1)
+plot(model1)
+model2 = lm(lnCI_difference ~ cur_seg_length + flank_seg_length + fragment_size, data = lm2DF)
+summary(model2)
+anova(model1, model2)
+```
+
+```{r}
+# The higher the log value the more similar the performance of two models are. 
+# Higher log values = more similar performance
+# DO NOT RUN AGAIN *** FINAL VALUES
+lm2DF = sim_permutations(
+  read_length = c(100, 150),
+  cur_seg_length = seq(250, 400, 50),
+  flank_seg_length = seq(1200, 1350, 50),
+  actual_flank_seg_cn = c(1, 2, 3, 4, 30, 80),
+  actual_cur_seg_cn = c(1, 2, 3, 4, 55, 70),
+  fragment_size = c(400, 500, 600),
+  coverage = c(30, 40, 60),
+  rd_model = "start_in",
+  vaf_model = "read_pair") #%>%
+lm2_modelDF = lm2DF %>%
+  combineCI(rd_model = "rd start_in", vaf_model = "vaf read_pair") %>%
+  # Higher log values: higher similarity in performance between models
+  mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width))) 
+# crossOverDF( rd_model = "rd start_in", 
+  #              vaf_model = "vaf read_pair") %>%
+  # mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width)))
+lm2DF_model1 = lm(lnCI_difference ~ cur_seg_length, lm2_modelDF)
+summary(lm2DF_model1)
+plot(lm2DF_model1)
+lm2DF_model2 = lm(lnCI_difference ~ cur_seg_length + flank_seg_length + actual_flank_seg_cn + actual_cur_seg_cn + coverage + read_length + fragment_size, data = lm2_modelDF)
+summary(lm2DF_model2)
+# Check performance of two linear models
+anova(lm2DF_model1, lm2DF_model2)
+# Explore this interaction: cur_seg_length:flank_seg_length:actual_flank_seg_cn, -7.525e-08, to further investigate how these parameters are negatively correlated to the difference between model performance. 
+lm(lnCI_difference ~ cur_seg_length * flank_seg_length * actual_flank_seg_cn * actual_cur_seg_cn * read_length, data = lm2_modelDF)
+# Linear model on a dataframe that only consist of similar performance between models to investigate which parameter(s) contirbute most to two models being similar.
+lm(lnCI_difference ~ cur_seg_length * flank_seg_length * actual_flank_seg_cn * actual_cur_seg_cn, data = filter(lm2_modelDF, abs(rd_ci_width - vaf_ci_width) <= 0.05))
+```

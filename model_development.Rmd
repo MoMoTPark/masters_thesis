@@ -1,0 +1,396 @@
+---
+title: "Model Development"
+author: ""
+date: ""
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r, echo=FALSE}
+source("Simulation_functions.R")
+source("crossOverFunctions.R")
+```
+
+```{r}
+# Current segment length for deletion case, RD models comparison
+rd_cur_seg_length_sim = sim_permutations(
+  cur_seg_length = seq(0, 500, 5),
+  flank_seg_length = 1000,
+  actual_flank_seg_cn = 4,
+  actual_cur_seg_cn = 2,
+  fragment_size = 600,
+  rd_model = c("overlap", "start_in"),
+  vaf_model = "split_read") %>%
+  filter(model!="vaf split_read")
+
+ggplot(rd_cur_seg_length_sim) +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw()
+```
+
+```{r}
+# Current segment length for duplication case, RD models comparison
+rd_cur_seg_length_sim = sim_permutations(
+  cur_seg_length = c(50, 150, 250),
+  flank_seg_length = 1000,
+  actual_flank_seg_cn = 1,
+  actual_cur_seg_cn = 2,
+  fragment_size = 600,
+  rd_model = c("overlap", "start_in"),
+  vaf_model = "split_read") %>%
+  filter(model!="vaf split_read")
+
+ggplot(rd_cur_seg_length_sim) +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw()
+
+view(rd_cur_seg_length_sim)
+```
+
+```{r}
+#' Current segment length for deletion case, RD and VAF models comparison
+rd_vaf_cur_seg_length_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = 1000,
+  actual_flank_seg_cn = 2,
+  actual_cur_seg_cn = 1,
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "split_read")
+
+ggplot(rd_vaf_cur_seg_length_sim) +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw()
+# Below code investigates how CI width is calculated 
+# Reported CI width is half width of 0.95 interval of 20000(10000 data points/model) instances
+# simulated for current segment length of 150b
+# Note that slight variation between replicated CI width values in two dataframes
+# due to separate simulation runs
+dim(rd_vaf_cur_seg_length_sim)
+view(rd_vaf_cur_seg_length_sim)
+
+
+observed_cn_dataframe_50 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=50,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe_100 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=100,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe_150 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=150,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+view(observed_cn_dataframe_150)
+group_by(observed_cn_dataframe_150, model) %>% 
+summarise(estimate_ci_width(cn_estimate))
+
+observed_cn_dataframe_200 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=200,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe = bind_rows(observed_cn_dataframe_50, observed_cn_dataframe_100, observed_cn_dataframe_150, observed_cn_dataframe_200)
+dim(observed_cn_dataframe)
+```
+
+```{r}
+# RESULTS SECTION
+working_dataframe = observed_cn_dataframe
+working_dataframe$cur_seg_length = as.factor(working_dataframe$cur_seg_length)
+
+# Compute CI estimate intervals of each model grouped by current segment length
+group_by(working_dataframe, model, cur_seg_length) %>%
+  summarise(estimate_ci_width(cn_estimate)) %>%
+  view()
+
+#group_by(working_dataframe, model, cur_seg_length) %>%
+ggplot(working_dataframe, aes(x=cur_seg_length, 
+           y=cn_estimate, 
+           #group=model, 
+           color=model)) +
+  #geom_crossbar()
+  #geom_errorbar(group=50, ymin=1 - 0.45, ymax=1 + 0.45)
+  #geom_point(size=0.1) 
+  geom_boxplot() +
+  theme_bw() +
+  #ggtitle("Interquantile range of estimated copy-number values \n from select current segment length sizes") +
+  labs(x="Current segment length (b)", y="Copy-number estimate")
+  #geom_errorbar(group="start_in", ymin=1 - 0.45, ymax=1 + 0.45)
+  #geom_point(x=150, y=1) +
+  #geom_errorbar(group=150, ymin=0.99 - 0.53, ymax=0.99 + 0.53, color="cyan", width = 0.5) +
+  #geom_point(x=150, y=0.99, color="cyan") +
+  #title="Interquantile range of estimated copy-number values from select current segment length sizes"
+  
+
+group_by(observed_cn_dataframe_50, model) %>%
+summarise(median(cn_estimate))
+
+view(working_dataframe)
+```
+Notes on confidence interval calculation:
+10000 copy number estimate values for each model is produced per simulation of each current segment length. These values are sorted in an array and the corresponding value which is located in index number 10000 x 0.975 = 9750 is subtracted from value of index 10000 x 0.025 = 250. The resulted value is the 0.95 confidence interval of sorted estimated copy number data points. This process is repeated in each simulation performed i.e., if current segment lengths of 50, 150, and 200 are simulated, there will be 6 CI intervals (3 values for each model). 
+
+
+```{r}
+#' Current segment length for duplication case, RD and VAF models comparison
+rd_vaf_cur_seg_length_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = 1000,
+  actual_flank_seg_cn = 1,
+  actual_cur_seg_cn = 2,
+  fragment_size = 600,
+  rd_model = "overlap",
+  vaf_model = "read_pair")
+
+ggplot(rd_vaf_cur_seg_length_sim) +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw()
+```
+
+## Facet plots
+```{r}
+# APPENDIX SECTION (to evaluate vaf split-read model)
+# Facet plots
+# Current segment CN vs Flanking segment CN, split_read vaf_model
+# DO NOT RUN AGAIN TAKES 2 HOURS TO RUN
+# This simulation could be used for everything as it covers all short segment length for copy numbers 1 to 4
+facet_cur_seg_length_SR_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = seq(50, 10000, 100),
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "split_read")
+```
+
+```{r}
+# APPENDIX SECTION CURRENT SEGMENT LENGTH FOR SPLIT-READ VAF
+# Convert variables used in facet grid into factors
+facet_cur_seg_length_SR_sim$actual_flank_seg_cn = as.factor(facet_cur_seg_length_SR_sim$actual_flank_seg_cn)
+facet_cur_seg_length_SR_sim$actual_cur_seg_cn = as.factor(facet_cur_seg_length_SR_sim$actual_cur_seg_cn)
+
+facet_cur_seg_length_SR_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  ggplot() +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both) +
+  ggtitle("Split-read based VAF model")
+
+```
+
+```{r}
+# APPENDIX SECTION FLANKING SEGMENT LENGTH FOR SPLIT-READ VAF
+# x axis: Flanking segment length
+facet_cur_seg_length_SR_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  ggplot() +
+  aes(x=flank_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Flanking Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both) +
+  ggtitle("Split-read based VAF model")
+```
+
+```{r}
+# APPENDIX SECTION (to evaluate vaf split-read and overlap models)
+# Facet plots
+# DO NOT RUN AGAIN TAKES 2 HOURS TO RUN
+# This simulation could be used for everything as it covers all short segment length for copy numbers 1 to 4
+facet_cur_seg_length_RP_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = seq(50, 10000, 100),
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "overlap",
+  vaf_model = "split_read")
+```
+
+```{r}
+# APPENDIX SECTION (to evaluate vaf read_pair and overlap models)
+# Facet plots
+# DO NOT RUN AGAIN TAKES 2 HOURS TO RUN
+# This simulation could be used for everything as it covers all short segment length for copy numbers 1 to 4
+facet_cur_seg_length_OL_RP_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = seq(50, 10000, 100),
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "overlap",
+  vaf_model = "read-pair")
+```
+
+```{r}
+# Facet plots
+# Current segment CN vs Flanking segment CN, read_pair vaf_model
+facet_cur_seg_length_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 5),
+  flank_seg_length = 1000,
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+
+# Convert variables used in facet grid into factors
+facet_cur_seg_length_sim$actual_flank_seg_cn = as.factor(facet_cur_seg_length_sim$actual_flank_seg_cn)
+facet_cur_seg_length_sim$actual_cur_seg_cn = as.factor(facet_cur_seg_length_sim$actual_cur_seg_cn)
+
+ggplot(facet_cur_seg_length_sim) +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(actual_cur_seg_cn ~ actual_flank_seg_cn, margins=FALSE,
+             labeller=label_both) +
+  ggtitle("vaf_model: read_pair")
+
+```
+
+```{r}
+# Facet plots
+# flanking segment length vs current segment CN, read_pair vaf_model
+facet_flankLength_curSegCN_sim = sim_permutations(
+  cur_seg_length = 150,
+  flank_seg_length = seq(150, 10000, 100),
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+
+# Convert variables used in facet grid into factors
+facet_flankLength_curSegCN_sim$actual_flank_seg_cn = as.factor(facet_flankLength_curSegCN_sim$actual_flank_seg_cn)
+facet_flankLength_curSegCN_sim$actual_cur_seg_cn = as.factor(facet_flankLength_curSegCN_sim$actual_cur_seg_cn)
+
+ggplot(facet_flankLength_curSegCN_sim) +
+  aes(x=flank_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Flanking Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(actual_cur_seg_cn ~ actual_flank_seg_cn,
+             labeller=label_both) +
+  ggtitle("Current segment length: 250b")
+
+```
+
+```{r}
+# Investigating cross-over points between models
+working_df = facet_cur_seg_length_sim
+dim(working_df)
+view(working_df)
+
+vaf_df = working_df %>%
+  group_by(model) %>%
+  filter(model == "vaf read_pair") %>%
+  rename(vaf_ci_width = ci_width) %>%
+  ungroup()
+view(vaf_df)
+
+rd_df = working_df %>%
+  group_by(model) %>%
+  filter(model == "rd start_in") %>%
+  rename(rd_ci_width = ci_width) %>%
+  ungroup()
+view(rd_df)
+
+crossOver_df = bind_cols(rd_df, vaf_df$vaf_ci_width) %>%
+  rename(vaf_ci_width = ...11) %>%
+  filter(abs(rd_ci_width - vaf_ci_width) <= 0.05)
+
+# This dataframe shows current length segments with 0.05 CI width difference between models for various current and flanking segment CN combinations. Next step would be to find the best way to visualise this information, perhaps with a heatmap to indicate the current length threshold with lowest CI width values. 
+view(crossOver_df)
+#view(joint_df)
+#view(filter(joint_df, (abs(rd_ci_width - vaf_ci_width) <= 0.05))) 
+crossOverDF(facet_cur_seg_length_sim, rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  ggplot(aes(x=cur_seg_length, y=abs(rd_ci_width - vaf_ci_width))) +
+  geom_line(smooth=0) +
+  theme_bw()
+
+workingDF = crossOverDF(facet_cur_seg_length_SR_sim, "rd start_in", "vaf split_read")
+# Filter only rows with columns equal to the following values
+analyticDF = workingDF %>% 
+  filter(actual_flank_seg_cn == 2) %>%
+  filter(actual_cur_seg_cn == 1)
+# Average cross over point in delection case of flank. CN 2 to flank. CN 1 
+mean(analyticDF$cur_seg_length)
+
+analyticDF$actual_cur_seg_cn = as.factor(analyticDF$actual_cur_seg_cn)
+analyticDF$actual_flank_seg_cn = as.factor(analyticDF$actual_flank_seg_cn)
+
+workingDF$actual_cur_seg_cn = as.factor(workingDF$actual_cur_seg_cn)
+workingDF$actual_flank_seg_cn = as.factor(workingDF$actual_flank_seg_cn)
+
+```
+
+```{r}
+# Testing cell
+# Concept test for comparing two values with filter()
+12 >= 10 - 2 | 12 <= 10 + 2
+```

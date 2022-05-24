@@ -1,0 +1,188 @@
+---
+title: "Thesis Plots"
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r, echo=FALSE}
+source("Simulation_functions.R")
+source("crossOverFunctions.R")
+```
+
+## Facet plots
+```{r}
+# Facet plots
+# DO NOT RUN AGAIN TAKES LONG TO RUN
+# This simulation could be used for everything as it covers all short segment length for copy numbers 1 to 4
+# These facet plots introduce trends in the results section
+facet_plots_sim = sim_permutations(
+  cur_seg_length = seq(0, 1000, 10),
+  flank_seg_length = seq(10, 10000, 100),
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = c("start_in", "overlap"),
+  vaf_model = c("split_read", "read_pair"))
+```
+
+```{r}
+# Results and discussion
+# Convert variables used in facet grid into factors
+facet_plots_sim$actual_flank_seg_cn = as.factor(facet_plots_sim$actual_flank_seg_cn)
+facet_plots_sim$actual_cur_seg_cn = as.factor(facet_plots_sim$actual_cur_seg_cn)
+
+# Cur_Seg, start-in, read-pair
+facet_plots_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  filter(model==c("rd start_in", "vaf read_pair")) %>%
+  ggplot() +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE, labeller = label_both()) +
+  ggtitle("VAF model: read-pair, RD model: start-in") +
+  theme(legend.position = "top")
+```
+
+```{r}
+# Results and discussion
+# flank_seg, start-in, read-pair
+facet_plots_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  filter(model==c("rd start_in", "vaf read_pair")) %>%
+  ggplot() +
+  aes(x=flank_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Flanking Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both) +
+  ggtitle("VAF model: read-pair, RD model: start-in")
+```
+
+```{r}
+# Appendix 1
+# Cur_seg, trend of all models
+facet_plots_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  ggplot() +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both)
+```
+
+```{r}
+# Appendix 1
+# flank_seg, trend of all models
+facet_plots_sim %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  ggplot() +
+  aes(x=flank_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Flanking Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both)
+```
+
+```{r}
+facet_plot_single_flank_length = sim_permutations(
+  cur_seg_length = seq(0, 1000, 10),
+  flank_seg_length = 10000,
+  actual_flank_seg_cn = c(1, 2, 3, 4),
+  actual_cur_seg_cn = c(1, 2, 3, 4),
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+```
+
+```{r}
+facet_plot_single_flank_length$actual_flank_seg_cn = as.factor(facet_plot_single_flank_length$actual_flank_seg_cn)
+facet_plot_single_flank_length$actual_cur_seg_cn = as.factor(facet_plot_single_flank_length$actual_cur_seg_cn)
+
+# Cur_Seg, start-in, read-pair
+facet_plot_single_flank_length %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn) %>%
+  ggplot() +
+  aes(x=cur_seg_length, y=ci_width, colour=model) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "Current Segment Length",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  facet_grid(Current_segment_CN ~ Flanking_segment_CN, margins=FALSE,
+             labeller=label_both) +
+  ggtitle("VAF model: read-pair, RD model: start-in, Flanking segment length: 10000b")
+```
+
+```{r}
+# Results and discussion
+# VAF model deletion and amplification cases
+vaf_values_plot = sim_permutations(
+    cur_seg_length = 50,
+    flank_seg_length = c(100, 1000, 10000),
+    actual_flank_seg_cn = seq(0, 4, 0.2),
+    actual_cur_seg_cn = seq(0, 4, 0.2),
+    fragment_size = 600,
+    rd_model = "start_in",
+    vaf_model = "read_pair")
+
+vaf_values_plot %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn, Flanking_segment_length = flank_seg_length, Current_segment_length = cur_seg_length) %>%
+  filter(model=="vaf read_pair") %>%
+  ggplot() +
+  aes(x=vaf, y=ci_width, colour=model, shape=Flanking_segment_CN > Current_segment_CN) +
+  geom_point(color = "blue") +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "SV-VAF",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  theme(legend.position="top") +
+  facet_grid(Current_segment_length ~ Flanking_segment_length, margins=FALSE, labeller = label_both) +
+  scale_y_continuous(breaks = seq(0, 7))
+```
+
+```{r}
+vaf_values_flipped_plot = sim_permutations(
+    cur_seg_length = 500,
+    flank_seg_length = c(50, 100, 250),
+    actual_flank_seg_cn = seq(0, 4, 0.2),
+    actual_cur_seg_cn = seq(0, 4, 0.2),
+    fragment_size = 600,
+    rd_model = "start_in",
+    vaf_model = "read_pair")
+
+vaf_values_flipped_plot %>%
+  rename(Flanking_segment_CN = actual_flank_seg_cn, Current_segment_CN = actual_cur_seg_cn, Flanking_segment_length = flank_seg_length, Current_segment_length = cur_seg_length) %>%
+  filter(model=="vaf read_pair") %>%
+  ggplot() +
+  aes(x=vaf, y=ci_width, colour=model, shape=Flanking_segment_CN > Current_segment_CN) +
+  geom_point(color = "blue") +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "SV-VAF",
+       y = "Confidence Interval Width") +
+  theme_bw() +
+  theme(legend.position="top") +
+  facet_grid(Current_segment_length ~ Flanking_segment_length, margins=FALSE, labeller = label_both) +
+  scale_y_continuous(breaks = seq(0, 7))
+```

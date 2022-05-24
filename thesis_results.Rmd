@@ -1,0 +1,187 @@
+---
+title: "thesis_results"
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r}
+source("Simulation_functions.R")
+source("crossOverFunctions.R")
+```
+
+### CI interval clarification plot:
+```{r}
+observed_cn_dataframe_50 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=50,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe_100 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=100,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe_150 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=150,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+group_by(observed_cn_dataframe_150, model) %>% 
+summarise(estimate_ci_width(cn_estimate))
+
+observed_cn_dataframe_200 = obs_cn(n=10000, 
+       read_length=100, 
+       coverage=30,
+       flank_seg_length=1000,
+       cur_seg_length=200,
+       actual_flank_seg_cn=2,
+       actual_cur_seg_cn=1,
+       fragment_size=600,
+       rd_model =  "start_in",
+       vaf_model = "split_read")
+
+observed_cn_dataframe = bind_rows(observed_cn_dataframe_50, observed_cn_dataframe_100, observed_cn_dataframe_150, observed_cn_dataframe_200)
+```
+
+```{r}
+working_dataframe = observed_cn_dataframe
+working_dataframe$cur_seg_length = as.factor(working_dataframe$cur_seg_length)
+
+# Compute CI estimate intervals of each model grouped by current segment length
+group_by(working_dataframe, model, cur_seg_length) %>%
+  summarise(estimate_ci_width(cn_estimate)) %>%
+  view()
+
+#group_by(working_dataframe, model, cur_seg_length) %>%
+ggplot(working_dataframe, aes(x=cur_seg_length, 
+           y=cn_estimate, 
+           #group=model, 
+           color=model)) +
+  #geom_crossbar()
+  #geom_errorbar(group=50, ymin=1 - 0.45, ymax=1 + 0.45)
+  #geom_point(size=0.1) 
+  geom_boxplot() +
+  theme_bw() +
+  #ggtitle("Interquantile range of estimated copy-number values \n from select current segment length sizes") +
+  labs(x="Current segment length (b)", y="Copy-number estimate")
+  #geom_errorbar(group="start_in", ymin=1 - 0.45, ymax=1 + 0.45)
+  #geom_point(x=150, y=1) +
+  #geom_errorbar(group=150, ymin=0.99 - 0.53, ymax=0.99 + 0.53, color="cyan", width = 0.5) +
+  #geom_point(x=150, y=0.99, color="cyan") +
+  #title="Interquantile range of estimated copy-number values from select current segment length sizes"
+  
+
+group_by(observed_cn_dataframe_50, model) %>%
+summarise(median(cn_estimate))
+
+view(working_dataframe)
+```
+
+### Flanking and current segment copy-number CI interval visualisation with corresponding VAF values.
+In deletion cases for short current segment lengths (100 b for this plot), and any flanking segment length, VAF model performs better than RD model. Note that CI interval of inferred copy-numbers with SV-VAF < 0.5 is an acceptable range.  
+```{r}
+#' SV-VAF values for various flanking and current segment copy number values
+#' Further confirms that SV-VAF model performs best when flanking and current CN values are closely related 
+vaf_flank_cur_cn_sim = sim_permutations(
+    cur_seg_length = 100,
+    flank_seg_length = seq(100, 1000, 100),
+    actual_flank_seg_cn = seq(0, 4, 0.2),
+    actual_cur_seg_cn = seq(0, 4, 0.2),
+    fragment_size = 600,
+    rd_model = "start_in",
+    vaf_model = "read_pair") %>%
+      filter(model == "vaf read_pair") 
+
+# This plot indicates that the vaf values less than 0.5 are more or less consistant with the assumption that in deletion cases SV-VAF model always perform better in short current segments. 
+vaf_flank_cur_cn_sim = vaf_flank_cur_cn_sim %>%
+  rename(flanking_segment_CN = actual_flank_seg_cn)
+vaf_flank_cur_cn_sim = vaf_flank_cur_cn_sim %>%
+  rename(current_segment_CN = actual_cur_seg_cn)
+ggplot(vaf_flank_cur_cn_sim) +
+  aes(x=vaf, y=ci_width, colour=model, shape=flanking_segment_CN > current_segment_CN) +
+  geom_point(color = "blue") +
+  scale_y_continuous(breaks=seq(0, 6, 1), limits = c(0, 6)) +
+  geom_smooth(level = 0) +
+  labs(colour="Model", 
+       x = "SV-VAF",
+       y = "Confidence Interval Width") +
+  theme_bw()
+```
+## Hypothesis 
+RD-based model performs better in amplification cases, where flanking segment copy-number is lower than current segment copy-number, when current segment length is $>50$, regardless of other parameter values. 
+In amplification cases where flanking segment copy-number is lower than current segment copy-number, performance of RD-based model is always better (i.e., CI interval width of inferred copy-number is a lower value) regardless of the value of other parameters with the exception where current segment length is $\le50$, SV-VAF based model performed better. 
+```{r}
+# Takes about 2 hours RUN LATER
+shortSegmentSim = sim_permutations(
+  read_length = 150,
+  cur_seg_length = seq(10, 500, 10),
+  flank_seg_length = seq(50, 1000, 25),
+  actual_flank_seg_cn = seq(1, 20, 1),
+  actual_cur_seg_cn = seq(0.5, 4, 0.5),
+  fragment_size = 600,
+  coverage = 60,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+```
+
+```{r}
+# The higher the log value the more similar the performance of two models are. 
+# Higher log values = more similar performance
+# DO NOT RUN AGAIN *** FINAL VALUES
+lm2DF = sim_permutations(
+  read_length = c(100, 150),
+  cur_seg_length = seq(250, 400, 50),
+  flank_seg_length = seq(1200, 1350, 50),
+  actual_flank_seg_cn = c(1, 2, 3, 4, 30, 80),
+  actual_cur_seg_cn = c(1, 2, 3, 4, 55, 70),
+  fragment_size = c(400, 500, 600),
+  coverage = c(30, 40, 60),
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+
+lm2_modelDF = lm2DF %>%
+  combineCI(rd_model = "rd start_in", vaf_model = "vaf read_pair") %>%
+  # Higher log values: higher similarity in performance between models
+  mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width))) 
+# crossOverDF( rd_model = "rd start_in", 
+  #              vaf_model = "vaf read_pair") %>%
+  # mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width)))
+lm2DF_model1 = lm(lnCI_difference ~ cur_seg_length, lm2_modelDF)
+summary(lm2DF_model1)
+plot(lm2DF_model1)
+lm2DF_model2 = lm(lnCI_difference ~ cur_seg_length + flank_seg_length + actual_flank_seg_cn + actual_cur_seg_cn + coverage + read_length + fragment_size, data = lm2_modelDF)
+summary(lm2DF_model2)
+# Check performance of two linear models
+anova(lm2DF_model1, lm2DF_model2)
+# Explore this interaction: cur_seg_length:flank_seg_length:actual_flank_seg_cn, -7.525e-08, to further investigate how these parameters are negatively correlated to the difference between model performance. 
+lm2DF_model3 = lm(lnCI_difference ~ cur_seg_length * flank_seg_length * actual_flank_seg_cn * actual_cur_seg_cn * coverage * read_length * fragment_size, data = lm2_modelDF)
+summary(lm2DF_model3)
+anova(lm2DF_model2, lm2DF_model3)
+# Linear model on a dataframe that only consist of similar performance between models to investigate which parameter(s) contirbute most to two models being similar.
+someDF2 = lm(lnCI_difference ~ cur_seg_length + flank_seg_length + actual_flank_seg_cn + actual_cur_seg_cn, data = filter(lm2_modelDF, abs(rd_ci_width - vaf_ci_width) <= 0.05))
+summary(someDF2)
+```

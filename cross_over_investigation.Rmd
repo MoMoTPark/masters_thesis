@@ -1,0 +1,310 @@
+---
+title: "cross_over_investigation"
+author: ""
+date: ""
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r, echo=FALSE}
+source("Simulation_functions.R")
+source("crossOverFunctions.R")
+library(reshape2)
+library(ggpubr)
+```
+
+```{r}
+#' ***DO NOT RUN AGAIN 
+#' Produce large simulation dataframe to investigate cross over point for various
+#' permutations of model parameters
+sim_df = sim_permutations(
+  cur_seg_length = seq(50, 2000, 50),
+  flank_seg_length = seq(100, 10000, 100),
+  actual_flank_seg_cn = seq(0.5, 4, 0.5),
+  actual_cur_seg_cn = seq(0.5, 4, 0.5),
+  fragment_size = 600,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+```
+
+```{r}
+#' Note that in some scenarios there is no cross over between the models and one model always perform better than the other.
+crossOver_sim_df = crossOverDF(sim_df, 
+                               rd_model = "rd start_in", 
+                               vaf_model = "vaf read_pair")
+```
+
+```{r}
+testDrive_df = crossOver_sim_df %>%
+  mutate(lnCI_difference = -log(abs(vaf_ci_width - rd_ci_width)))
+
+# Cross over points density distribution based on the current segment length
+# Note that smaller -log values are more desirable as they indicate a true cross over point, while larger values indicate a bigger gap between performance of two models.
+# Note that length 50 b has the least number of cross over points; second following is length 150 b. This observation may suggest that in current segment value of 150 one model outperforms another most of the time. Next step is to investigate current segment length of 150 b to evaluate performance of each model.  
+testDrive_df %>%
+  ggplot(aes(x = as.factor(cur_seg_length), y = lnCI_difference)) +
+  ylim(2.9, 14) +
+  geom_point() + 
+  geom_hline(yintercept = -log(0.05)) +
+  geom_hline(yintercept = 6, colour = 'red') +
+  theme_bw()
+```
+
+### Heatmaps
+```{r}
+# Note that higher values of negative log CI differences indicate more similarity between performance of models. These areas have a lighter shade. Generally areas that are shaded strongly or are not included are the areas of interest. Areas that are not included in the heatmap indicate a clear gap between performance of two models and therefore, one model always is performing better than the other. This could be reflected and highlighted for those current segment length segments. 
+testDrive_df %>%
+  filter(cur_seg_length <= 1000, flank_seg_length <= 2000) %>%
+  ggplot(aes(x = as.factor(cur_seg_length), y = as.factor(actual_cur_seg_cn), fill = lnCI_difference)) +
+  geom_tile()
+
+# No cross over point at 100 b for current segment length
+testDrive_df %>%
+  filter(cur_seg_length <= 1000, flank_seg_length <= 2000) %>%
+  ggplot(aes(x = as.factor(cur_seg_length), y = as.factor(flank_seg_length), fill = lnCI_difference)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#8B0000",
+                      high = "#f6f805",
+                      guide = "colorbar") +
+  theme_bw()
+```
+
+```{r}
+l100b = sim_df  %>%
+  ungroup() %>%
+  filter(cur_seg_length == 100, flank_seg_length == 100)
+
+vafl100b = l100b %>%
+  filter(model == "vaf read_pair") %>%
+  rename(vaf_ci_width = ci_width)
+
+rdl100b = l100b %>%
+  filter(model == "rd split_read") %>%
+  rename(rd_ci_width = ci_width)
+
+cleanL100b = combineCI(l100b, rd_model = "rd start_in", vaf_model = "vaf read_pair") %>%
+  select(-c(model))
+# For current and flanking segment length size of about 100 b when flanking segment CN > current segment CN, SV-VAF model always performs better (CI width of SV-VAF model is less than RD model by more than 0.05). 
+cleanL100b %>%
+  filter(vaf_ci_width < rd_ci_width) %>%
+  view()
+
+# However, when flanking segment CN < current segment CN, RD model always perform better. 
+cleanL100b %>%
+  filter(vaf_ci_width > rd_ci_width) %>%
+  view()
+```
+
+```{r}
+# The higher the log value the more similar the performance of two models are. 
+# Higher log values = more similar performance
+# TAKES ABOUT 4 HOURS TO RUN 
+# *** DO NOT RUN AGAIN 
+lmGeneralSim = sim_permutations(
+  read_length = 150,
+  cur_seg_length = seq(0, 1000, 20),
+  flank_seg_length = seq(50, 10000, 100),
+  actual_flank_seg_cn = c(seq(1, 5), 10, 20, 30, 50, 70),
+  actual_cur_seg_cn = c(seq(1, 10), 20, 30, 40, 55, 70),
+  fragment_size = 600,
+  coverage = 60,
+  rd_model = "start_in",
+  vaf_model = "read_pair")
+```
+
+```{r}
+# two main cases where RD is better than VAF even in deletion cases: current segment length is not short anymore therefore, it provides enough informaion for RD-based model to perform well. Also, the difference between copy-number is a high number, which occurs when the VAF values are quite large, 75% larger than 0.75.
+# The following plot shows summary stats of current segment lengths where RD model perform better than VAF model. 
+lmGeneralSim %>%
+  combineCI(rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  filter(vaf_ci_width > rd_ci_width) %>%
+  rename(Current_segment_length = cur_seg_length) %>%
+  melt() %>%
+  filter(variable == "Current_segment_length") %>%
+  ggplot(aes(factor(variable), value)) +
+  geom_boxplot(outlier.shape = NA, width = 0.2) +
+  labs(x="", y="Current segment length(b)") +
+  theme_linedraw()
+  # ggplot(aes(x = rd_model, y = cur_seg_length)) +
+  # geom_boxplot()
+  # filter(flank_seg_length <= 5000) %>%
+  # ggplot(aes(x = as.factor(cur_seg_length), y = as.factor(flank_seg_length), fill = -log(abs(vaf_ci_width - rd_ci_width)))) +
+  # geom_tile() +
+  # scale_fill_gradient(low = "#8B0000",
+  #                     high = "#f6f805",
+  #                     guide = "colorbar") +
+  # theme_bw() +
+  # theme(axis.text.x = element_text(angle = 90))
+```
+
+```{r}
+# The following plot highlights the summary stats of copy-number values where RD model performs better than VAF-based model. Showing that mostly in amplification cases. Consistent with our conclusions from VAF-values plot.   
+lmGeneralSim %>%
+  combineCI(rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  #filter(actual_flank_seg_cn > actual_cur_seg_cn) %>%
+  rename(Current_segment_copy_number = actual_cur_seg_cn, Flanking_segment_copy_number = actual_flank_seg_cn) %>%
+  filter(vaf_ci_width > rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "Current_segment_copy_number" | variable == "Flanking_segment_copy_number") %>%
+  ggplot(aes(factor(variable), value, color=factor(variable))) +
+  geom_boxplot(outlier.shape = NA, width = 0.2) +
+  labs(x="", y="Copy-number value") +
+  theme_linedraw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Since we already concluded that VAF model is often better in deletion cases, now we are interested to know the cases where a deletion has occurred but RD-model performed better.
+lmGeneralSim %>%
+  combineCI(rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  filter(actual_flank_seg_cn > actual_cur_seg_cn) %>%
+  rename(Current_segment_copy_number = actual_cur_seg_cn, Flanking_segment_copy_number = actual_flank_seg_cn) %>%
+  filter(vaf_ci_width > rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "Current_segment_copy_number" | variable == "Flanking_segment_copy_number") %>%
+  ggplot(aes(factor(variable), value, color=factor(variable))) +
+  geom_boxplot(outlier.shape = NA, width = 0.4) +
+  labs(x="", y="Copy-number value") +
+  theme_linedraw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Checking flanking segment length range where VAF model performs better than RD based model in amplification cases
+lmGeneralSim %>%
+  combineCI(rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  filter(actual_flank_seg_cn < actual_cur_seg_cn) %>%
+  rename(Flanking_segment_length = flank_seg_length) %>%
+  filter(vaf_ci_width < rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "Flanking_segment_length") %>%
+  ggplot(aes(factor(variable), value)) +
+  geom_boxplot(outlier.shape = NA, width = 0.2) +
+  labs(x="", y="Length(b)") +
+  theme_linedraw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Checking current segment length range where VAF model performs better than RD based model in amplification cases
+lmGeneralSim %>%
+  combineCI(rd_model="rd start_in", vaf_model="vaf read_pair") %>%
+  filter(actual_flank_seg_cn < actual_cur_seg_cn) %>%
+  rename(Current_segment_length = cur_seg_length) %>%
+  filter(vaf_ci_width < rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "Current_segment_length") %>%
+  ggplot(aes(factor(variable), value)) +
+  geom_boxplot(outlier.shape = NA, width = 0.2) +
+  labs(x="", y="Length(b)") +
+  theme_linedraw() +
+  theme(legend.position = "none")
+```
+
+```{r}
+# Smaller (darker colors) ln_CI_difference values represent performance similarity 
+# Larger (lighter shades) ln_CI_difference values represent performance difference
+lmGeneralSim %>%
+  crossOverDF(rd_model = "rd start_in", vaf_model = "vaf read_pair")  %>%
+  mutate(CI_Log_difference = log10(abs(rd_ci_width - vaf_ci_width))) %>%
+  #view()
+  filter(flank_seg_length <= 2000) %>%
+  ggplot(aes(x = as.factor(cur_seg_length), y = as.factor(flank_seg_length), fill = CI_Log_difference)) +
+  geom_tile() +
+  scale_fill_gradient(low = "#8B0000",
+                      high = "#f6f805",
+                      guide = "colorbar") +
+  theme(axis.ticks = element_blank(), 
+        axis.text.x = element_blank(),
+        axis.text.y = element_blank()) +
+  labs(x = "Current segment length 20 - 1000(b)", y = "Flanking segment length 50 - 10,000(b)")
+  #theme(element_text(angle = 54, vjust = 0.5, hjust = 0.5))
+```
+
+```{r}
+# Investigate regions identified as > 0 log CI difference
+# VAF model performs better
+# Current and flanking segment length values 
+lmGeneralSim %>%
+  crossOverDF(rd_model = "rd start_in", vaf_model = "vaf read_pair")  %>%
+  mutate(CI_Log_difference = log10(abs(rd_ci_width - vaf_ci_width))) %>%
+  #view()
+  filter(flank_seg_length <= 2000, CI_Log_difference >= 0, vaf_ci_width < rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "flank_seg_length" | variable == "cur_seg_length") %>%
+  ggplot(aes(factor(variable), value, color=variable)) +
+  geom_boxplot(outlier.shape = NA, width = 0.3) +
+  labs(x="", y="Length(b)") +
+  theme_linedraw() +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("cur_seg_length" = "Current Segment Length", 
+                            "flank_seg_length" = "Flanking Segment Length")) +
+  ggtitle("VAF-based model performed better")
+```
+
+```{r}
+# Investigate regions identified as > 0 log CI difference
+# VAF model performs better
+# Current and flanking segment copy-numbers  
+lmGeneralSim %>%
+  crossOverDF(rd_model = "rd start_in", vaf_model = "vaf read_pair")  %>%
+  mutate(CI_Log_difference = log10(abs(rd_ci_width - vaf_ci_width))) %>%
+  #view()
+  filter(flank_seg_length <= 2000, CI_Log_difference >= 0, vaf_ci_width < rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "actual_flank_seg_cn" | variable == "actual_cur_seg_cn") %>%
+  ggplot(aes(factor(variable), value, color=variable)) +
+  geom_boxplot(outlier.shape = NA, width = 0.3) +
+  labs(x="", y="Copy-number") +
+  theme_linedraw() +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("actual_flank_seg_cn" = "Flanking Segment Copy-number",
+                            "actual_cur_seg_cn" = "Current Segment Copy-number")) +
+  ggtitle("VAF-based model performed better")
+```
+
+```{r}
+# Investigate regions identified as > 0 log CI difference
+# RD model performs better
+# Current and flanking segment length values 
+lmGeneralSim %>%
+  crossOverDF(rd_model = "rd start_in", vaf_model = "vaf read_pair")  %>%
+  mutate(CI_Log_difference = log10(abs(rd_ci_width - vaf_ci_width))) %>%
+  #view()
+  filter(flank_seg_length <= 2000, CI_Log_difference >= 0, vaf_ci_width > rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "flank_seg_length" | variable == "cur_seg_length") %>%
+  ggplot(aes(factor(variable), value, color=variable)) +
+  geom_boxplot(outlier.shape = NA, width = 0.3) +
+  labs(x="", y="Length(b)") +
+  theme_linedraw() +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("cur_seg_length" = "Current Segment Length", 
+                            "flank_seg_length" = "Flanking Segment Length")) +
+  ggtitle("RD-based model performed better")
+```
+
+```{r}
+# Investigate regions identified as > 0 log CI difference
+# RD model performs better
+# Current and flanking segment copy-numbers  
+lmGeneralSim %>%
+  crossOverDF(rd_model = "rd start_in", vaf_model = "vaf read_pair")  %>%
+  mutate(CI_Log_difference = log10(abs(rd_ci_width - vaf_ci_width))) %>%
+  #view()
+  filter(flank_seg_length <= 2000, CI_Log_difference >= 0, vaf_ci_width > rd_ci_width) %>%
+  melt() %>%
+  filter(variable == "actual_flank_seg_cn" | variable == "actual_cur_seg_cn") %>%
+  ggplot(aes(factor(variable), value, color=variable)) +
+  geom_boxplot(outlier.shape = NA, width = 0.3) +
+  labs(x="", y="Copy-number") +
+  theme_linedraw() +
+  theme(legend.position = "none") +
+  scale_x_discrete(labels=c("actual_flank_seg_cn" = "Flanking Segment Copy-number",
+                            "actual_cur_seg_cn" = "Current Segment Copy-number")) +
+  ggtitle("RD-based model performs better")
+```
