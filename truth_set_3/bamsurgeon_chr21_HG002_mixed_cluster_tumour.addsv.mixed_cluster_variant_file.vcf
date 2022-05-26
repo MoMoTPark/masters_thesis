@@ -1,0 +1,28 @@
+##fileformat=VCFv4.1
+##phasing=none
+##INDIVIDUAL=TRUTH
+##SAMPLE=<ID=TRUTH,Individual="TRUTH",Description="bamsurgeon spike-in">
+##INFO=<ID=CIPOS,Number=2,Type=Integer,Description="Confidence interval around POS for imprecise variants">
+##INFO=<ID=IMPRECISE,Number=0,Type=Flag,Description="Imprecise structural variation">
+##INFO=<ID=SVTYPE,Number=1,Type=String,Description="Type of structural variant">
+##INFO=<ID=SVLEN,Number=.,Type=Integer,Description="Difference in length between REF and ALT alleles">
+##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description="Somatic mutation in primary">
+##INFO=<ID=VAF,Number=1,Type=Float,Description="Variant Allele Frequency">
+##INFO=<ID=DPR,Number=1,Type=Float,Description="Avg Depth in Region (+/- 1bp)">
+##INFO=<ID=MATEID,Number=1,Type=String,Description="Breakend mate">
+##ALT=<ID=INV,Description="Inversion">
+##ALT=<ID=DUP,Description="Duplication">
+##ALT=<ID=DEL,Description="Deletion">
+##ALT=<ID=INS,Description="Insertion">
+##ALT=<ID=IGN,Description="Ignore SNVs in Interval">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+#CHROM	POS	ID	REF	ALT	QUAL	FILTER	INFO	FORMAT	SPIKEIN
+chr21	27690936	.	A	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=27693736;SVLEN=2800;VAF=0.5	GT	./.
+chr21	27677600	.	A	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=27677655;SVLEN=55;VAF=0.9	GT	./.
+chr21	27679766	.	T	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=27680456;SVLEN=690;VAF=0.6	GT	./.
+chr21	27696836	.	C	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=27696941;SVLEN=105;VAF=0.9	GT	./.
+chr21	27677655	.	T	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=27678913;SVLEN=1258;VAF=0.8	GT	./.
+chr21	27687768	.	T	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=27687836;SVLEN=68;VAF=0.9	GT	./.
+chr21	27678913	.	C	<DEL>	100	PASS	SOMATIC;SVTYPE=DEL;END=27679214;SVLEN=301;VAF=0.7	GT	./.
+chr21	27681586	.	A	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=27684356;SVLEN=2770;VAF=0.8	GT	./.
+chr21	27679214	.	T	<DUP>	100	PASS	SOMATIC;SVTYPE=DUP;END=27679766;SVLEN=552;VAF=0.3	GT	./.
