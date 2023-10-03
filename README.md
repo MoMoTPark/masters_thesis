@@ -1,4 +1,6 @@
-## Analysis of copy number structural variants by pair-end short read simulation
+### Master of Bioinformatics Final Thesis (University of Melbourne & Walter and Eliza Hall Institute of Medical Research)
+
+As part of research project component of my master of bioinformatics coursework, I conducted research about sequencing data processing algorithms for a duration of 1.5 years. My research primarily consist of bioinformatics tool development in genomic structural variant calling. As part of this project I gained valuable technical skills in Linux command-line, bash scripting, R programming, and analytical methods. I also had the opportunity to be part of the talented cohort at the Walter and Eliza Hall Institute of Medical Research (WEHI). 
 
 ### Introduction
 
